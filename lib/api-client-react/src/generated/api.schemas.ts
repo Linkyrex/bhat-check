@@ -8,3 +8,54 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface GoldPricePoint {
+  /** ISO date string */
+  date: string;
+  /** Gold price in USD per troy ounce */
+  price: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+}
+
+export interface GoldPriceResponse {
+  range: string;
+  currency: string;
+  unit: string;
+  data: GoldPricePoint[];
+  minPrice: number;
+  maxPrice: number;
+  startPrice: number;
+  endPrice: number;
+  changePercent: number;
+}
+
+export interface CurrentGoldPrice {
+  price: number;
+  currency: string;
+  unit: string;
+  change: number;
+  changePercent: number;
+  timestamp: string;
+  previousClose: number;
+}
+
+export type GetGoldPricesParams = {
+  /**
+   * Time range for gold price data
+   */
+  range?: GetGoldPricesRange;
+};
+
+export type GetGoldPricesRange =
+  (typeof GetGoldPricesRange)[keyof typeof GetGoldPricesRange];
+
+export const GetGoldPricesRange = {
+  "1m": "1m",
+  "3m": "3m",
+  "6m": "6m",
+  "1y": "1y",
+  "5y": "5y",
+} as const;

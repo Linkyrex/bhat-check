@@ -1,0 +1,11 @@
+packages:
+  "recharts": "Interactive charts for gold prices"
+  "framer-motion": "Smooth transitions and layout animations"
+  "date-fns": "Date formatting for chart axes and tooltips"
+  "clsx": "Utility for conditionally joining classNames"
+  "tailwind-merge": "Utility to cleanly merge tailwind classes"
+
+images:
+  - path: "artifacts/gold-plotter/public/images/bg-glow.png"
+    description: "Dark, moody abstract background with very subtle, soft glowing gold and amber gradients. Minimalist, premium financial dashboard aesthetic."
+    aspect_ratio: "16:9"

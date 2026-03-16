@@ -13,7 +13,12 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  CurrentGoldPrice,
+  GetGoldPricesParams,
+  GoldPriceResponse,
+  HealthStatus,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
 import type { ErrorType } from "../custom-fetch";
@@ -92,6 +97,177 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns gold price data for a given time range
+ * @summary Get gold prices
+ */
+export const getGetGoldPricesUrl = (params?: GetGoldPricesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/gold/prices?${stringifiedParams}`
+    : `/api/gold/prices`;
+};
+
+export const getGoldPrices = async (
+  params?: GetGoldPricesParams,
+  options?: RequestInit,
+): Promise<GoldPriceResponse> => {
+  return customFetch<GoldPriceResponse>(getGetGoldPricesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetGoldPricesQueryKey = (params?: GetGoldPricesParams) => {
+  return [`/api/gold/prices`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetGoldPricesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getGoldPrices>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetGoldPricesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getGoldPrices>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetGoldPricesQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getGoldPrices>>> = ({
+    signal,
+  }) => getGoldPrices(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getGoldPrices>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetGoldPricesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getGoldPrices>>
+>;
+export type GetGoldPricesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get gold prices
+ */
+
+export function useGetGoldPrices<
+  TData = Awaited<ReturnType<typeof getGoldPrices>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetGoldPricesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getGoldPrices>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetGoldPricesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns the latest gold price and daily change info
+ * @summary Get current gold price
+ */
+export const getGetCurrentGoldPriceUrl = () => {
+  return `/api/gold/current`;
+};
+
+export const getCurrentGoldPrice = async (
+  options?: RequestInit,
+): Promise<CurrentGoldPrice> => {
+  return customFetch<CurrentGoldPrice>(getGetCurrentGoldPriceUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCurrentGoldPriceQueryKey = () => {
+  return [`/api/gold/current`] as const;
+};
+
+export const getGetCurrentGoldPriceQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCurrentGoldPrice>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCurrentGoldPrice>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCurrentGoldPriceQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCurrentGoldPrice>>
+  > = ({ signal }) => getCurrentGoldPrice({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCurrentGoldPrice>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCurrentGoldPriceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCurrentGoldPrice>>
+>;
+export type GetCurrentGoldPriceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get current gold price
+ */
+
+export function useGetCurrentGoldPrice<
+  TData = Awaited<ReturnType<typeof getCurrentGoldPrice>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCurrentGoldPrice>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCurrentGoldPriceQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

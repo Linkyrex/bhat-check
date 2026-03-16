@@ -6,4 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./currentGoldPrice";
+export * from "./getGoldPricesParams";
+export * from "./getGoldPricesRange";
+export * from "./goldPricePoint";
+export * from "./goldPriceResponse";
 export * from "./healthStatus";

@@ -14,3 +14,51 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Returns gold price data for a given time range
+ * @summary Get gold prices
+ */
+export const getGoldPricesQueryRangeDefault = `1y`;
+
+export const GetGoldPricesQueryParams = zod.object({
+  range: zod
+    .enum(["1m", "3m", "6m", "1y", "5y"])
+    .default(getGoldPricesQueryRangeDefault)
+    .describe("Time range for gold price data"),
+});
+
+export const GetGoldPricesResponse = zod.object({
+  range: zod.string(),
+  currency: zod.string(),
+  unit: zod.string(),
+  data: zod.array(
+    zod.object({
+      date: zod.string().describe("ISO date string"),
+      price: zod.number().describe("Gold price in USD per troy ounce"),
+      open: zod.number().optional(),
+      high: zod.number().optional(),
+      low: zod.number().optional(),
+      close: zod.number().optional(),
+    }),
+  ),
+  minPrice: zod.number(),
+  maxPrice: zod.number(),
+  startPrice: zod.number(),
+  endPrice: zod.number(),
+  changePercent: zod.number(),
+});
+
+/**
+ * Returns the latest gold price and daily change info
+ * @summary Get current gold price
+ */
+export const GetCurrentGoldPriceResponse = zod.object({
+  price: zod.number(),
+  currency: zod.string(),
+  unit: zod.string(),
+  change: zod.number(),
+  changePercent: zod.number(),
+  timestamp: zod.string(),
+  previousClose: zod.number(),
+});

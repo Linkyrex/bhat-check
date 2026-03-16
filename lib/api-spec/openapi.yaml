@@ -1,6 +1,5 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
   description: API specification
@@ -10,6 +9,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: gold
+    description: Gold price operations
 paths:
   /healthz:
     get:
@@ -24,6 +25,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /gold/prices:
+    get:
+      operationId: getGoldPrices
+      tags: [gold]
+      summary: Get gold prices
+      description: Returns gold price data for a given time range
+      parameters:
+        - name: range
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [1m, 3m, 6m, 1y, 5y]
+            default: 1y
+          description: Time range for gold price data
+      responses:
+        "200":
+          description: Gold price data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoldPriceResponse"
+  /gold/current:
+    get:
+      operationId: getCurrentGoldPrice
+      tags: [gold]
+      summary: Get current gold price
+      description: Returns the latest gold price and daily change info
+      responses:
+        "200":
+          description: Current gold price
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentGoldPrice"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +69,81 @@ components:
           type: string
       required:
         - status
-
+    GoldPricePoint:
+      type: object
+      properties:
+        date:
+          type: string
+          description: ISO date string
+        price:
+          type: number
+          description: Gold price in USD per troy ounce
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        close:
+          type: number
+      required:
+        - date
+        - price
+    GoldPriceResponse:
+      type: object
+      properties:
+        range:
+          type: string
+        currency:
+          type: string
+        unit:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/GoldPricePoint"
+        minPrice:
+          type: number
+        maxPrice:
+          type: number
+        startPrice:
+          type: number
+        endPrice:
+          type: number
+        changePercent:
+          type: number
+      required:
+        - range
+        - currency
+        - unit
+        - data
+        - minPrice
+        - maxPrice
+        - startPrice
+        - endPrice
+        - changePercent
+    CurrentGoldPrice:
+      type: object
+      properties:
+        price:
+          type: number
+        currency:
+          type: string
+        unit:
+          type: string
+        change:
+          type: number
+        changePercent:
+          type: number
+        timestamp:
+          type: string
+        previousClose:
+          type: number
+      required:
+        - price
+        - currency
+        - unit
+        - change
+        - changePercent
+        - timestamp
+        - previousClose

@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Gold Price Plotter"
+version = "1.0.0"
+id = "artifacts/gold-plotter"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 21153
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/gold-plotter run dev"
+
+[services.env]
+PORT = "21153"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/gold-plotter", "run", "build"]
+publicDir = "artifacts/gold-plotter/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
