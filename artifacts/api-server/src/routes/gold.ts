@@ -7,22 +7,119 @@ import {
 
 const router: IRouter = Router();
 
-// Realistic 1 Baht Thai gold price as of March 2026 (~฿47,500)
-const TODAY_PRICE = 47500;
+// 1 Baht Thai gold ornament (ทองรูปพรรณ) = 15.244g at 96.5% purity
+const GRAMS_PER_BAHT = 15.244;
+const TROY_OZ_GRAMS = 31.1035;
+const THAI_GOLD_PURITY = 0.965;
 
-// Historical starting prices so each range ends near TODAY_PRICE with realistic growth
-const RANGE_CONFIG: Record<string, { days: number; startPrice: number }> = {
-  "1m":  { days: 30,   startPrice: 46200 },  // ~+2.8% over 1 month
-  "3m":  { days: 90,   startPrice: 44800 },  // ~+6% over 3 months
-  "6m":  { days: 180,  startPrice: 42500 },  // ~+11.8% over 6 months
-  "1y":  { days: 365,  startPrice: 38500 },  // ~+23.4% over 1 year
-  "5y":  { days: 1825, startPrice: 27000 },  // ~+75% over 5 years
+// Simple in-memory cache to avoid hammering external APIs
+const cache: Record<string, { data: unknown; expiresAt: number }> = {};
+function getCached<T>(key: string): T | null {
+  const entry = cache[key];
+  if (entry && Date.now() < entry.expiresAt) return entry.data as T;
+  return null;
+}
+function setCache(key: string, data: unknown, ttlMs: number) {
+  cache[key] = { data, expiresAt: Date.now() + ttlMs };
+}
+
+// Convert international spot price to Thai 1 Baht gold price in THB
+function toBahtGoldTHB(xauUsd: number, usdThb: number): number {
+  return Math.round((xauUsd / TROY_OZ_GRAMS) * GRAMS_PER_BAHT * THAI_GOLD_PURITY * usdThb);
+}
+
+async function fetchLiveSpotPrice(): Promise<number> {
+  const cached = getCached<number>("spot");
+  if (cached) return cached;
+
+  const res = await fetch("https://api.gold-api.com/price/XAU", {
+    headers: { "User-Agent": "Mozilla/5.0" },
+  });
+  if (!res.ok) throw new Error(`gold-api.com failed: ${res.status}`);
+  const json = (await res.json()) as { price: number };
+  setCache("spot", json.price, 5 * 60 * 1000); // 5 min
+  return json.price;
+}
+
+async function fetchLiveUsdThb(): Promise<number> {
+  const cached = getCached<number>("usdthb");
+  if (cached) return cached;
+
+  const res = await fetch("https://open.er-api.com/v6/latest/USD");
+  if (!res.ok) throw new Error(`exchange rate API failed: ${res.status}`);
+  const json = (await res.json()) as { rates: Record<string, number> };
+  const rate = json.rates["THB"];
+  setCache("usdthb", rate, 60 * 60 * 1000); // 1 hour
+  return rate;
+}
+
+async function fetchYahooFinance(symbol: string, range: string, interval: string) {
+  const cacheKey = `yahoo_${symbol}_${range}_${interval}`;
+  const cached = getCached<unknown[]>(cacheKey);
+  if (cached) return cached;
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`;
+  const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+  if (!res.ok) throw new Error(`Yahoo Finance failed for ${symbol}: ${res.status}`);
+  const json = (await res.json()) as {
+    chart: {
+      result: Array<{
+        timestamp: number[];
+        indicators: {
+          quote: Array<{
+            open: (number | null)[];
+            high: (number | null)[];
+            low: (number | null)[];
+            close: (number | null)[];
+          }>;
+        };
+      }>;
+    };
+  };
+  const result = json.chart.result?.[0];
+  if (!result) throw new Error(`No data from Yahoo Finance for ${symbol}`);
+
+  const ts = result.timestamp;
+  const q = result.indicators.quote[0];
+  const rows = ts.map((t, i) => ({
+    date: new Date(t * 1000).toISOString().split("T")[0],
+    open: q.open[i],
+    high: q.high[i],
+    low: q.low[i],
+    close: q.close[i],
+  }));
+
+  setCache(cacheKey, rows, 15 * 60 * 1000); // 15 min
+  return rows;
+}
+
+const RANGE_MAP: Record<string, { yRange: string; yInterval: string }> = {
+  "1m": { yRange: "1mo", yInterval: "1d" },
+  "3m": { yRange: "3mo", yInterval: "1d" },
+  "6m": { yRange: "6mo", yInterval: "1d" },
+  "1y": { yRange: "1y",  yInterval: "1wk" },
+  "5y": { yRange: "5y",  yInterval: "1wk" },
 };
 
-function generateGoldPrices(range: string) {
-  const config = RANGE_CONFIG[range] ?? RANGE_CONFIG["1y"];
-  const { days, startPrice } = config;
-  const now = new Date();
+router.get("/prices", async (req, res) => {
+  const queryResult = GetGoldPricesQueryParams.safeParse(req.query);
+  const range = queryResult.success ? (queryResult.data.range ?? "1y") : "1y";
+  const { yRange, yInterval } = RANGE_MAP[range] ?? RANGE_MAP["1y"];
+
+  // Fetch gold (GC=F) and USD/THB (THB=X) in parallel
+  const [goldRows, fxRows] = await Promise.all([
+    fetchYahooFinance("GC=F", yRange, yInterval),
+    fetchYahooFinance("THB=X", yRange, yInterval),
+  ]);
+
+  // Build a date → USDTHB map
+  const fxMap: Record<string, number> = {};
+  for (const row of fxRows) {
+    if (row.close != null) fxMap[row.date] = row.close;
+  }
+
+  // Carry-forward last known FX rate to fill gaps
+  let lastFx = fxRows.find((r) => r.close != null)?.close ?? 33;
 
   const data: {
     date: string;
@@ -33,92 +130,81 @@ function generateGoldPrices(range: string) {
     close: number;
   }[] = [];
 
-  // Linear base path from startPrice to TODAY_PRICE, plus noise
-  const totalMove = TODAY_PRICE - startPrice;
-  const seed = days * 31;
+  for (const row of goldRows) {
+    if (row.close == null) continue;
+    const fx = fxMap[row.date] ?? lastFx;
+    lastFx = fx;
 
-  for (let i = days; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split("T")[0];
+    const close = toBahtGoldTHB(row.close, fx);
+    const open  = row.open  != null ? toBahtGoldTHB(row.open,  fx) : close;
+    const high  = row.high  != null ? toBahtGoldTHB(row.high,  fx) : close;
+    const low   = row.low   != null ? toBahtGoldTHB(row.low,   fx) : close;
 
-    const t = (days - i) / days; // 0 → 1 over the period
-
-    // Smooth S-curve trend from startPrice → TODAY_PRICE
-    const sCurve = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-    const trendPrice = startPrice + totalMove * sCurve;
-
-    // Realistic daily noise: ~0.5–0.8% of price
-    const noise = (Math.sin(t * days * 0.9 + seed) * 0.5 + Math.sin(t * days * 2.3 + seed * 0.7) * 0.3) * 0.006;
-    const close = Math.round(trendPrice * (1 + noise));
-
-    // Daily OHLC within ±0.8% of close
-    const dailyVol = close * 0.008;
-    const open  = Math.round(close + Math.sin(t * days * 3.1 + 1) * dailyVol * 0.5);
-    const high  = Math.round(Math.max(open, close) + Math.abs(Math.sin(t * days * 5.7 + 2)) * dailyVol * 0.9);
-    const low   = Math.round(Math.min(open, close) - Math.abs(Math.sin(t * days * 4.3 + 3)) * dailyVol * 0.9);
-
-    data.push({ date: dateStr, price: close, open, high, low, close });
+    data.push({ date: row.date, price: close, open, high, low, close });
   }
 
-  // Force the very last point to land exactly on TODAY_PRICE for consistency
-  if (data.length > 0) {
-    const last = data[data.length - 1];
-    last.price = TODAY_PRICE;
-    last.close = TODAY_PRICE;
-    last.high  = Math.max(last.high, TODAY_PRICE);
-    last.low   = Math.min(last.low,  TODAY_PRICE);
+  if (data.length === 0) {
+    res.status(503).json({ error: "No data available" });
+    return;
   }
 
-  return data;
-}
-
-router.get("/prices", (req, res) => {
-  const queryResult = GetGoldPricesQueryParams.safeParse(req.query);
-  const range = queryResult.success ? (queryResult.data.range ?? "1y") : "1y";
-
-  const data = generateGoldPrices(range);
   const prices = data.map((d) => d.price);
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
-  const startPrice = data[0]?.price ?? 0;
-  const endPrice = data[data.length - 1]?.price ?? 0;
-  const changePercent = startPrice > 0 ? ((endPrice - startPrice) / startPrice) * 100 : 0;
+  const startPrice = data[0].price;
+  const endPrice = data[data.length - 1].price;
+  const changePercent = Math.round(((endPrice - startPrice) / startPrice) * 10000) / 100;
 
-  const response = GetGoldPricesResponse.parse({
-    range,
-    currency: "THB",
-    unit: "baht",
-    data,
-    minPrice,
-    maxPrice,
-    startPrice,
-    endPrice,
-    changePercent: Math.round(changePercent * 100) / 100,
-  });
-
-  res.json(response);
+  res.json(
+    GetGoldPricesResponse.parse({
+      range,
+      currency: "THB",
+      unit: "baht",
+      data,
+      minPrice,
+      maxPrice,
+      startPrice,
+      endPrice,
+      changePercent,
+    })
+  );
 });
 
-router.get("/current", (_req, res) => {
-  const now = new Date();
-  // Derive yesterday's close from the 1m dataset so change is consistent
-  const recentData = generateGoldPrices("1m");
-  const prevClose = recentData[recentData.length - 2]?.price ?? TODAY_PRICE;
-  const change = TODAY_PRICE - prevClose;
-  const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
+router.get("/current", async (_req, res) => {
+  const [xauUsd, usdThb] = await Promise.all([
+    fetchLiveSpotPrice(),
+    fetchLiveUsdThb(),
+  ]);
 
-  const response = GetCurrentGoldPriceResponse.parse({
-    price: TODAY_PRICE,
-    currency: "THB",
-    unit: "baht",
-    change: Math.round(change),
-    changePercent: Math.round(changePercent * 100) / 100,
-    timestamp: now.toISOString(),
-    previousClose: prevClose,
-  });
+  const price = toBahtGoldTHB(xauUsd, usdThb);
 
-  res.json(response);
+  // Approximate previous close using yesterday's daily GC=F
+  let previousClose = price;
+  try {
+    const rows = await fetchYahooFinance("GC=F", "5d", "1d");
+    const validRows = rows.filter((r) => r.close != null);
+    if (validRows.length >= 2) {
+      const prevFx = usdThb; // same-day FX is fine for prev close approx
+      previousClose = toBahtGoldTHB(validRows[validRows.length - 2].close!, prevFx);
+    }
+  } catch {
+    // fall back to same as price
+  }
+
+  const change = price - previousClose;
+  const changePercent = Math.round((change / previousClose) * 10000) / 100;
+
+  res.json(
+    GetCurrentGoldPriceResponse.parse({
+      price,
+      currency: "THB",
+      unit: "baht",
+      change: Math.round(change),
+      changePercent,
+      timestamp: new Date().toISOString(),
+      previousClose,
+    })
+  );
 });
 
 export default router;
