@@ -32,8 +32,8 @@ export function Dashboard() {
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-amber-700 flex items-center justify-center shadow-xl shadow-primary/20">
             <BarChart3 className="text-primary-foreground w-7 h-7" />
           </div>
-          <h1 className="text-3xl font-display font-bold tracking-tight">
-            Aurum<span className="text-primary">Plot</span>
+          <h1 className="text-4xl font-display font-extrabold tracking-tight">
+            Weni<span className="text-primary">ka</span>
           </h1>
         </div>
         <div className="hidden sm:flex items-center gap-2.5 px-5 py-2.5 bg-card/60 border border-border/50 rounded-full text-sm font-semibold text-muted-foreground backdrop-blur-xl shadow-sm">
