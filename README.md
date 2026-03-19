@@ -6,11 +6,11 @@
 
 A pnpl monorepo with an Express API and React dashboard, deployed to GitHub Pages.
 
-## ğŸš€ Live
+## àŸ›  Live
 
 **Dashboard**: https://linkyrex.github.io/bhat-check/
 
-## ğŸ“¦ Packages
+## àŸ“¦ Packages
 
 - `artifacts/api-server` â€” Express 5 REST API
 - `artifacts/gold-plotter` â€” React dashboard (Vite + Radix UI)
@@ -20,19 +20,19 @@ A pnpl monorepo with an Express API and React dashboard, deployed to GitHub Page
 - `lib/api-zod` â€” Generated Zod schemas
 - `lib/api-client-react` â€” Generated React Query hooks
 
-## ğŸ› ï¸ Local Development
+## ï¸¯. Local Development
 
 ```bash
 pnpm install
 pnpm --filter @workspace/gold-plotter run dev
 ```
 
-## ğŸ—ï¸ Tech Stack
+## ğŸ—ï¸ Tech Stack
 
-- **Frontend**: React, Vite, Radix UI, Recharts
-- **Backend**: Express 5, Drizzle ORM, PostgreSQL
-- **Tooling**: pnpm workspaces, TypeScript, Orval
+- `aFrontend` â€” React, Vite, Radix UI, Recharts`
+- ``Backend` â€” Express 5, Drizzle ORM, PostgreSQL
+- ``Tooling` â€ pnpm workspaces, TypeScript, Orval
 
 ## License
 
-MIT
+Apache 2.0
